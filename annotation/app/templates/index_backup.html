@@ -1,0 +1,853 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>医学表型标注系统</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+            
+            /* Tag Colors - Positive */
+            --tag-patient-bg: #dbeafe;
+            --tag-patient-text: #1e40af;
+            --tag-family-bg: #d1fae5;
+            --tag-family-text: #065f46;
+            --tag-llm-bg: #f3e8ff;
+            --tag-llm-text: #6b21a8;
+            --tag-tagger-bg: #ffedd5;
+            --tag-tagger-text: #9a3412;
+            --tag-bert-bg: #ffe4e6;
+            --tag-bert-text: #9f1239;
+
+            /* Tag Colors - Negative */
+            --tag-patient-neg-bg: #fef3c7;
+            --tag-patient-neg-text: #92400e;
+            --tag-family-neg-bg: #e0e7ff;
+            --tag-family-neg-text: #3730a3;
+
+            /* Progress Colors */
+            --progress-bg: #e5e7eb;
+            --progress-fill: #10b981;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 10px 15px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            height: 100%;
+        }
+
+        /* Top Control Bar - Compact */
+        .header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--card-bg);
+            padding: 8px 15px;
+            border-radius: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+        }
+
+        .data-id {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text-main);
+        }
+
+        .nav-buttons button {
+            padding: 5px 12px;
+            margin-left: 8px;
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+        }
+
+        .nav-buttons button:hover:not(:disabled) {
+            background-color: var(--bg-color);
+            border-color: #d1d5db;
+        }
+
+        .nav-buttons button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Progress Bar Section - Compact Inline */
+        .progress-section {
+            background: var(--card-bg);
+            padding: 6px 15px;
+            border-radius: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .progress-title {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .progress-bar-container {
+            flex: 1;
+            height: 6px;
+            background-color: var(--progress-bg);
+            border-radius: 3px;
+            overflow: hidden;
+            max-width: 200px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            background-color: var(--progress-fill);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .progress-stats {
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .progress-stats .number {
+            font-weight: 600;
+            color: var(--text-main);
+        }
+
+        .progress-stats .annotated .number {
+            color: var(--progress-fill);
+        }
+
+        /* Main Content Grid - Three Columns */
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 2.5fr 1fr;
+            gap: 12px;
+            flex: 1;
+            min-height: 0;
+        }
+
+        /* Panels */
+        .panel {
+            background: var(--card-bg);
+            padding: 12px 15px;
+            border-radius: 6px;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .panel-title {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid var(--bg-color);
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Left Panel: Source Text */
+        .source-text {
+            font-size: 14px;
+            line-height: 1.7;
+            color: #374151;
+            white-space: pre-wrap;
+        }
+
+        /* Middle Panel - Compact Layout */
+        .middle-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 15px;
+            align-content: start;
+        }
+
+        .annotation-group {
+            margin-bottom: 0;
+        }
+
+        .group-label {
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: block;
+            color: var(--text-secondary);
+        }
+
+        /* Section Headers */
+        .section-header {
+            grid-column: 1 / -1;
+            font-size: 11px;
+            font-weight: 600;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 6px 0 2px 0;
+            border-bottom: 1px dashed var(--border-color);
+            margin-top: 4px;
+        }
+
+        .section-header:first-child {
+            margin-top: 0;
+        }
+
+        /* Tag Styles */
+        .tag-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            min-height: 28px;
+            padding: 3px;
+            border-radius: 4px;
+        }
+
+        .tag-container:empty::before {
+            content: "无";
+            color: #d1d5db;
+            font-size: 12px;
+            padding: 2px 6px;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .tag > span:first-child {
+            user-select: text;
+            cursor: text;
+        }
+
+        .tag .delete-btn {
+            margin-left: 5px;
+            width: 14px;
+            height: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 14px;
+            line-height: 1;
+            opacity: 0.5;
+            transition: opacity 0.2s, background 0.2s;
+            user-select: none;
+        }
+
+        .tag .delete-btn:hover {
+            opacity: 1;
+            background-color: rgba(0,0,0,0.1);
+        }
+
+        /* Right Panel - Input Forms */
+        .input-section {
+            margin-bottom: 12px;
+        }
+
+        .input-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .input-label {
+            font-size: 11px;
+            font-weight: 600;
+            margin-bottom: 4px;
+            display: block;
+            color: var(--text-secondary);
+        }
+
+        .input-group {
+            display: flex;
+            gap: 6px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 13px;
+            outline: none;
+            transition: border-color 0.2s;
+            min-width: 0;
+        }
+
+        .input-group input:focus {
+            border-color: var(--primary-color);
+        }
+
+        .input-group button {
+            padding: 6px 10px;
+            background-color: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            color: var(--text-main);
+            transition: background 0.2s;
+            white-space: nowrap;
+        }
+
+        .input-group button:hover {
+            background-color: var(--bg-color);
+            border-color: #d1d5db;
+        }
+
+        .input-section-title {
+            font-size: 11px;
+            font-weight: 600;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+            padding-bottom: 4px;
+            border-bottom: 1px dashed var(--border-color);
+        }
+
+        /* Color Variants - Positive */
+        .tag.patient {
+            background-color: var(--tag-patient-bg);
+            color: var(--tag-patient-text);
+        }
+        
+        .tag.family {
+            background-color: var(--tag-family-bg);
+            color: var(--tag-family-text);
+        }
+
+        .tag.llm {
+            background-color: var(--tag-llm-bg);
+            color: var(--tag-llm-text);
+        }
+
+        .tag.tagger {
+            background-color: var(--tag-tagger-bg);
+            color: var(--tag-tagger-text);
+        }
+
+        .tag.bert {
+            background-color: var(--tag-bert-bg);
+            color: var(--tag-bert-text);
+        }
+
+        /* Color Variants - Negative */
+        .tag.patient_neg {
+            background-color: var(--tag-patient-neg-bg);
+            color: var(--tag-patient-neg-text);
+        }
+
+        .tag.family_neg {
+            background-color: var(--tag-family-neg-bg);
+            color: var(--tag-family-neg-text);
+        }
+
+        /* Footer - Compact */
+        .footer-bar {
+            padding: 8px 0;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
+        .btn-submit {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 24px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .btn-submit:hover {
+            background-color: #1d4ed8;
+        }
+
+        .btn-submit:active {
+            transform: scale(0.98);
+        }
+
+        .btn-unsure {
+            background-color: #f59e0b;
+            box-shadow: 0 2px 4px rgba(245, 158, 11, 0.3);
+        }
+
+        .btn-unsure:hover {
+            background-color: #d97706;
+        }
+
+        .completion-message {
+            display: none;
+            text-align: center;
+            padding: 30px;
+            background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+            border-radius: 10px;
+            margin: 15px 0;
+        }
+
+        .completion-message.show {
+            display: block;
+        }
+
+        .completion-message h2 {
+            color: #065f46;
+            margin-bottom: 8px;
+            font-size: 20px;
+        }
+
+        .completion-message p {
+            color: #047857;
+            font-size: 14px;
+        }
+
+        /* Responsive adjustments */
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr 1fr;
+            }
+            .panel:first-child {
+                grid-column: 1 / -1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            body {
+                height: auto;
+                overflow: auto;
+            }
+            .progress-section {
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header: Data Sequence & Navigation - Compact -->
+    <div class="header-bar">
+        <div class="data-id">序号: <span id="display-id">--</span></div>
+        <div class="nav-buttons">
+            <button id="btn-prev" onclick="navigate(-1)">← 上一个</button>
+            <button id="btn-next" onclick="navigate(1)">下一个 →</button>
+        </div>
+    </div>
+
+    <!-- Progress Bar Section - Compact Inline -->
+    <div class="progress-section">
+        <span class="progress-title">📊 进度</span>
+        <div class="progress-bar-container">
+            <div class="progress-bar-fill" id="progress-bar" style="width: 0%"></div>
+        </div>
+        <div class="progress-stats">
+            <span class="annotated">已标注: <span class="number" id="progress-annotated">0</span></span>
+            <span>剩余: <span class="number" id="progress-remaining">0</span></span>
+            <span>共: <span class="number" id="progress-total">0</span></span>
+            <span>(<span id="progress-percentage">0</span>%)</span>
+        </div>
+    </div>
+
+    <!-- Completion Message -->
+    <div class="completion-message" id="completion-message">
+        <h2>🎉 所有数据已标注完成！</h2>
+        <p>共完成 <span id="completion-count">0</span> 条数据的标注。</p>
+    </div>
+
+    <!-- Main Content Area - Three Columns -->
+    <div class="main-content" id="main-content">
+        
+        <!-- Left Panel: Source Text -->
+        <div class="panel">
+            <div class="panel-title">原始病历文本</div>
+            <div id="phenotype-text" class="source-text">请等待数据加载...</div>
+        </div>
+
+        <!-- Middle Panel: All Tags Display - Grid Layout -->
+        <div class="panel">
+            <div class="panel-title">表型标签展示</div>
+            <div class="middle-panel">
+                <!-- 阳性表型 -->
+                <div class="section-header">✅ 阳性表型</div>
+                
+                <div class="annotation-group">
+                    <span class="group-label">患者表型</span>
+                    <div id="container-patient" class="tag-container"></div>
+                </div>
+
+                <div class="annotation-group">
+                    <span class="group-label">患者家属表型</span>
+                    <div id="container-family" class="tag-container"></div>
+                </div>
+
+                <!-- 阴性表型 -->
+                <div class="section-header">❌ 阴性表型</div>
+
+                <div class="annotation-group">
+                    <span class="group-label">患者阴性表型</span>
+                    <div id="container-patient-neg" class="tag-container"></div>
+                </div>
+
+                <div class="annotation-group">
+                    <span class="group-label">患者家属阴性表型</span>
+                    <div id="container-family-neg" class="tag-container"></div>
+                </div>
+
+                <!-- 大模型预测 -->
+                <div class="section-header">🤖 大模型预测表型</div>
+
+                <div class="annotation-group" style="grid-column: 1 / -1;">
+                    <span class="group-label">LLM 预测 (只读)</span>
+                    <div id="container-llm" class="tag-container"></div>
+                </div>
+
+                <!-- 模型预测参考 -->
+                <div class="section-header">📊 模型预测参考</div>
+
+                <div class="annotation-group">
+                    <span class="group-label">PhenoTagger (只读)</span>
+                    <div id="container-tagger" class="tag-container"></div>
+                </div>
+
+                <div class="annotation-group">
+                    <span class="group-label">PhenoBert (只读)</span>
+                    <div id="container-bert" class="tag-container"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Input Forms -->
+        <div class="panel">
+            <div class="panel-title">表型输入</div>
+
+            <!-- 阳性表型输入 -->
+            <div class="input-section-title">✅ 阳性表型</div>
+            
+            <div class="input-section">
+                <span class="input-label">患者表型</span>
+                <div class="input-group">
+                    <input type="text" id="input-patient" placeholder="输入阳性表型..." onkeyup="handleEnter(event, 'patient')">
+                    <button onclick="addTag('patient')">添加</button>
+                </div>
+            </div>
+
+            <div class="input-section">
+                <span class="input-label">患者家属表型</span>
+                <div class="input-group">
+                    <input type="text" id="input-family" placeholder="输入阳性表型..." onkeyup="handleEnter(event, 'family')">
+                    <button onclick="addTag('family')">添加</button>
+                </div>
+            </div>
+
+            <!-- 阴性表型输入 -->
+            <div class="input-section-title" style="margin-top: 12px;">❌ 阴性表型</div>
+
+            <div class="input-section">
+                <span class="input-label">患者阴性表型</span>
+                <div class="input-group">
+                    <input type="text" id="input-patient-neg" placeholder="输入阴性表型..." onkeyup="handleEnter(event, 'patient_neg')">
+                    <button onclick="addTag('patient_neg')">添加</button>
+                </div>
+            </div>
+
+            <div class="input-section">
+                <span class="input-label">患者家属阴性表型</span>
+                <div class="input-group">
+                    <input type="text" id="input-family-neg" placeholder="输入阴性表型..." onkeyup="handleEnter(event, 'family_neg')">
+                    <button onclick="addTag('family_neg')">添加</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer: Submit - Compact -->
+    <div class="footer-bar" id="footer-bar">
+        <button class="btn-submit btn-unsure" onclick="submitData(false)">不确定</button>
+        <button class="btn-submit" onclick="submitData(true)">提交</button>
+    </div>
+</div>
+
+<script>
+    let currentData = null;
+    let progressInfo = { total: 0, annotated: 0, remaining: 0, percentage: 0 };
+    let standardTerms = new Set();
+    let standardTermsLoaded = false;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadStandardTerms();
+        loadData('init');
+    });
+
+    async function loadStandardTerms() {
+        try {
+            const response = await fetch('/standard_terms');
+            if (response.ok) {
+                const data = await response.json();
+                standardTerms = new Set(data.terms);
+                standardTermsLoaded = true;
+            }
+        } catch (error) {
+            console.error("加载标准术语失败:", error);
+        }
+    }
+
+    function isStandardTerm(term) {
+        if (!standardTermsLoaded || standardTerms.size === 0) return true;
+        return standardTerms.has(term.trim());
+    }
+
+    function formatTermDisplay(term) {
+        return isStandardTerm(term) ? term : `【${term}】`;
+    }
+
+    function updateProgressDisplay(progress) {
+        if (!progress) return;
+        progressInfo = progress;
+        document.getElementById('progress-annotated').textContent = progress.annotated;
+        document.getElementById('progress-remaining').textContent = progress.remaining;
+        document.getElementById('progress-total').textContent = progress.total;
+        document.getElementById('progress-percentage').textContent = progress.percentage;
+        document.getElementById('progress-bar').style.width = progress.percentage + '%';
+        
+        if (progress.remaining === 0 && progress.total > 0) {
+            showCompletionMessage(progress.annotated);
+        }
+    }
+
+    function showCompletionMessage(count) {
+        document.getElementById('completion-message').classList.add('show');
+        document.getElementById('completion-count').textContent = count;
+        document.getElementById('main-content').style.display = 'none';
+        document.getElementById('footer-bar').style.display = 'none';
+    }
+
+    async function loadData(action) {
+        try {
+            const payload = { action: action, current_id: currentData ? currentData.index : null };
+            const response = await fetch('/change', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+            const data = await response.json();
+
+            if (data.message === "No more data") {
+                if (data.progress) updateProgressDisplay(data.progress);
+                if (action === 'init') {
+                    if (data.progress && data.progress.total > 0 && data.progress.remaining === 0) {
+                        showCompletionMessage(data.progress.annotated);
+                    } else {
+                        document.getElementById('phenotype-text').textContent = "暂无待标注数据。";
+                    }
+                } else {
+                    alert("没有更多数据了");
+                }
+                return;
+            }
+
+            if (data) {
+                if (data.progress) updateProgressDisplay(data.progress);
+                currentData = data;
+                renderScreen();
+            }
+        } catch (error) {
+            console.error("Error loading data:", error);
+            document.getElementById('phenotype-text').textContent = "连接后端服务失败。";
+        }
+    }
+
+    function renderScreen() {
+        if (!currentData) return;
+
+        document.getElementById('display-id').textContent = currentData.index || '--';
+        document.getElementById('btn-prev').disabled = false; 
+        document.getElementById('btn-next').disabled = false;
+        document.getElementById('phenotype-text').textContent = currentData.description || '';
+
+        // 阳性表型
+        renderTags('container-patient', currentData.human_annotated.patient_phenotypes || [], 'patient');
+        renderTags('container-family', currentData.human_annotated.family_phenotypes || [], 'family');
+        
+        // 阴性表型
+        renderTags('container-patient-neg', currentData.human_annotated.patient_phenotypes_neg || [], 'patient_neg');
+        renderTags('container-family-neg', currentData.human_annotated.family_phenotypes_neg || [], 'family_neg');
+
+        // 模型预测
+        renderTags('container-llm', currentData.llm_predict || [], 'llm');
+        renderTags('container-tagger', currentData.tagger || [], 'tagger');
+        renderTags('container-bert', currentData.bert || [], 'bert');
+        
+        // 清空输入框
+        ['input-patient', 'input-family', 'input-patient-neg', 'input-family-neg'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+    }
+
+    function renderTags(containerId, tags, typeClass) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+
+        tags.forEach((tagText, index) => {
+            const tagEl = document.createElement('div');
+            tagEl.className = `tag ${typeClass}`;
+            
+            const textSpan = document.createElement('span');
+            textSpan.textContent = formatTermDisplay(tagText);
+            tagEl.appendChild(textSpan);
+
+            const readOnlyTypes = ['llm', 'tagger', 'bert'];
+            if (!readOnlyTypes.includes(typeClass)) {
+                const deleteBtn = document.createElement('span');
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.innerHTML = '×';
+                deleteBtn.title = '删除';
+                deleteBtn.onclick = () => deleteTag(typeClass, index);
+                tagEl.appendChild(deleteBtn);
+            }
+
+            container.appendChild(tagEl);
+        });
+    }
+
+    function addTag(type) {
+        if (!currentData) return;
+
+        const config = {
+            'patient': { inputId: 'input-patient', key: 'patient_phenotypes' },
+            'family': { inputId: 'input-family', key: 'family_phenotypes' },
+            'patient_neg': { inputId: 'input-patient-neg', key: 'patient_phenotypes_neg' },
+            'family_neg': { inputId: 'input-family-neg', key: 'family_phenotypes_neg' }
+        };
+
+        const cfg = config[type];
+        if (!cfg) return;
+
+        if (!currentData.human_annotated[cfg.key]) currentData.human_annotated[cfg.key] = [];
+        
+        const inputEl = document.getElementById(cfg.inputId);
+        const newValue = inputEl.value.trim();
+
+        if (newValue) {
+            currentData.human_annotated[cfg.key].push(newValue);
+            inputEl.value = '';
+            renderScreen();
+        }
+    }
+
+    function handleEnter(event, type) {
+        if (event.key === 'Enter') addTag(type);
+    }
+
+    function deleteTag(type, index) {
+        if (!currentData) return;
+
+        const keyMap = {
+            'patient': 'patient_phenotypes',
+            'family': 'family_phenotypes',
+            'patient_neg': 'patient_phenotypes_neg',
+            'family_neg': 'family_phenotypes_neg'
+        };
+
+        const key = keyMap[type];
+        if (key && currentData.human_annotated[key]) {
+            currentData.human_annotated[key].splice(index, 1);
+            renderScreen();
+        }
+    }
+
+    function navigate(direction) {
+        loadData(direction === 1 ? 'next' : 'prev');
+    }
+
+    async function submitData(isSure) {
+        if (!currentData) return;
+        
+        const payload = {
+            index: currentData.index,
+            description: currentData.description,
+            patient_phenotypes: currentData.human_annotated.patient_phenotypes || [],
+            family_phenotypes: currentData.human_annotated.family_phenotypes || [],
+            patient_phenotypes_neg: currentData.human_annotated.patient_phenotypes_neg || [],
+            family_phenotypes_neg: currentData.human_annotated.family_phenotypes_neg || [],
+            is_sure: isSure
+        };
+
+        try {
+            const response = await fetch('/submit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                if (result.progress) updateProgressDisplay(result.progress);
+                
+                if (result.status === 'warning') {
+                    alert(`${currentData.index} 已标注过，跳过`);
+                } else {
+                    alert(`${currentData.index} ${isSure ? '提交成功' : '已标记不确定'}`);
+                }
+                loadData('init');
+            } else {
+                alert('提交失败');
+            }
+        } catch (error) {
+            console.error("Submission error:", error);
+            alert('提交请求失败');
+        }
+    }
+</script>
+
+</body>
+</html>

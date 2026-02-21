@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>医学表型标注系统</title>
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --bg-color: #f3f4f6;
+            --card-bg: #ffffff;
+            --text-main: #1f2937;
+            --text-secondary: #6b7280;
+            --border-color: #e5e7eb;
+            
+            /* Tag Colors */
+            --tag-patient-bg: #dbeafe;
+            --tag-patient-text: #1e40af;
+            --tag-family-bg: #d1fae5;
+            --tag-family-text: #065f46;
+            --tag-llm-bg: #f3e8ff;
+            --tag-llm-text: #6b21a8;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            padding: 20px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: 100%;
+        }
+
+        /* Top Control Bar */
+        .header-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: var(--card-bg);
+            padding: 15px 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .data-id {
+            font-weight: bold;
+            font-size: 1.1em;
+            color: var(--text-main);
+        }
+
+        .nav-buttons button {
+            padding: 8px 16px;
+            margin-left: 10px;
+            background-color: white;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .nav-buttons button:hover:not(:disabled) {
+            background-color: var(--bg-color);
+            border-color: #d1d5db;
+        }
+
+        .nav-buttons button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Main Content Grid */
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Split view */
+            gap: 20px;
+            flex: 1;
+            min-height: 0; /* Important for scrolling */
+        }
+
+        /* Sections */
+        .panel {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .panel-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--bg-color);
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        /* Left Panel: Source Text */
+        .source-text {
+            font-size: 16px;
+            line-height: 1.8;
+            color: #374151;
+            white-space: pre-wrap;
+        }
+
+        /* Right Panel: Annotations */
+        .annotation-group {
+            margin-bottom: 25px;
+        }
+
+        .group-label {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            display: block;
+            color: var(--text-secondary);
+        }
+
+        /* Tag Styles */
+        .tag-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            min-height: 40px; /* Visual cue if empty */
+            padding: 5px;
+            border: 1px dashed transparent;
+            border-radius: 6px;
+            transition: border-color 0.2s;
+            margin-bottom: 10px;
+        }
+
+        .tag-container:empty::before {
+            content: "无数据";
+            color: #9ca3af;
+            font-size: 14px;
+            padding: 5px;
+        }
+
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            /* user-select: none; Removed to allow selection */
+        }
+
+        /* Allow text selection inside tags */
+        .tag > span:first-child {
+            user-select: text;
+            cursor: text;
+        }
+
+        .tag .delete-btn {
+            margin-left: 8px;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 16px;
+            line-height: 1;
+            opacity: 0.6;
+            transition: opacity 0.2s, background 0.2s;
+            user-select: none; /* Prevent selection of delete button */
+        }
+
+        .tag .delete-btn:hover {
+            opacity: 1;
+            background-color: rgba(0,0,0,0.1);
+        }
+
+        /* Input Group Styles */
+        .input-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .input-group input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-group input:focus {
+            border-color: var(--primary-color);
+        }
+
+        .input-group button {
+            padding: 8px 16px;
+            background-color: #fff;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            color: var(--text-main);
+            transition: background 0.2s;
+        }
+
+        .input-group button:hover {
+            background-color: var(--bg-color);
+            border-color: #d1d5db;
+        }
+
+        /* Color Variants */
+        .tag.patient {
+            background-color: var(--tag-patient-bg);
+            color: var(--tag-patient-text);
+        }
+        
+        .tag.family {
+            background-color: var(--tag-family-bg);
+            color: var(--tag-family-text);
+        }
+
+        .tag.llm {
+            background-color: var(--tag-llm-bg);
+            color: var(--tag-llm-text);
+        }
+
+        /* Footer */
+        .footer-bar {
+            padding: 15px 0;
+            display: flex;
+            justify-content: flex-end;
+        }
+
+        .btn-submit {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 30px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3);
+            transition: transform 0.1s, background-color 0.2s;
+        }
+
+        .btn-submit:hover {
+            background-color: #1d4ed8;
+        }
+
+        .btn-submit:active {
+            transform: scale(0.98);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            body {
+                height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <!-- Header: Data Sequence & Navigation -->
+    <div class="header-bar">
+        <div class="data-id">数据序号: <span id="display-id">--</span></div>
+        <div class="nav-buttons">
+            <button id="btn-prev" onclick="navigate(-1)">&#8592; 上一个</button>
+            <button id="btn-next" onclick="navigate(1)">下一个 &#8594;</button>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="main-content">
+        
+        <!-- Left Panel: Constant Text -->
+        <div class="panel">
+            <div class="panel-title">原始病历文本</div>
+            <div id="phenotype-text" class="source-text">
+                <!-- Content will be injected by JS -->
+            </div>
+        </div>
+
+        <!-- Right Panel: Annotation Variables -->
+        <div class="panel">
+            <div class="panel-title">表型标注操作</div>
+
+            <!-- Group 2: Patient Phenotypes -->
+            <div class="annotation-group">
+                <span class="group-label">患者表型 (可删除/添加)</span>
+                <div id="container-patient" class="tag-container"></div>
+                <div class="input-group">
+                    <input type="text" id="input-patient" placeholder="输入患者表型..." onkeyup="handleEnter(event, 'patient')">
+                    <button onclick="addTag('patient')">确认添加</button>
+                </div>
+            </div>
+
+            <!-- Group 3: Family Phenotypes -->
+            <div class="annotation-group">
+                <span class="group-label">患者家属表型 (可删除/添加)</span>
+                <div id="container-family" class="tag-container"></div>
+                <div class="input-group">
+                    <input type="text" id="input-family" placeholder="输入家属表型..." onkeyup="handleEnter(event, 'family')">
+                    <button onclick="addTag('family')">确认添加</button>
+                </div>
+            </div>
+
+            <!-- Group 4: LLM Predicted Phenotypes -->
+            <div class="annotation-group">
+                <span class="group-label">大模型预测表型 (不可修改)</span>
+                <div id="container-llm" class="tag-container"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer: Submit -->
+    <div class="footer-bar">
+        <button class="btn-submit" onclick="submitData()">提交本条数据</button>
+    </div>
+</div>
+
+<script>
+    // 模拟数据源 (Mock Data)
+    const mockData = [
+        {
+            id: "DATA_001",
+            text: "患者主诉反复发热伴皮疹3天。体检发现面部蝴蝶形红斑，口腔溃疡。既往有光过敏史。其母亲有类风湿关节炎病史，父亲体健。",
+            patientPhenotypes: ["发热", "皮疹", "面部蝴蝶形红斑", "口腔溃疡", "光过敏"],
+            familyPhenotypes: ["类风湿关节炎"],
+            llmPredictions: ["系统性红斑狼疮", "发热", "皮疹", "关节痛"]
+        },
+        {
+            id: "DATA_002",
+            text: "患儿，男，5岁。因'行走不稳1年'入院。查体：眼距宽，鼻梁低平，通贯掌。心脏听诊无杂音。智力发育落后于同龄儿。染色体核型分析待回报。",
+            patientPhenotypes: ["行走不稳", "眼距宽", "鼻梁低平", "通贯掌", "智力发育迟滞"],
+            familyPhenotypes: [],
+            llmPredictions: ["唐氏综合征", "智力低下", "肌张力低下", "特殊面容"]
+        },
+        {
+            id: "DATA_003",
+            text: "青年男性，突发剧烈头痛伴呕吐。CT示蛛网膜下腔出血。追问病史，患者祖父及伯父均死于脑动脉瘤破裂。",
+            patientPhenotypes: ["剧烈头痛", "呕吐", "蛛网膜下腔出血"],
+            familyPhenotypes: ["脑动脉瘤破裂", "脑卒中"],
+            llmPredictions: ["脑动脉瘤", "头痛", "颅内出血"]
+        }
+    ];
+
+    // 当前数据索引
+    let currentIndex = 0;
+    // 深拷贝一份数据用于前端修改（避免直接修改原数据源，模拟提交逻辑）
+    let activeData = JSON.parse(JSON.stringify(mockData));
+
+    // 初始化
+    document.addEventListener('DOMContentLoaded', () => {
+        renderScreen();
+    });
+
+    // 渲染主屏幕
+    function renderScreen() {
+        const currentData = activeData[currentIndex];
+
+        // 1. 设置序号
+        document.getElementById('display-id').textContent = currentData.id;
+
+        // 2. 设置按钮状态
+        document.getElementById('btn-prev').disabled = currentIndex === 0;
+        document.getElementById('btn-next').disabled = currentIndex === activeData.length - 1;
+
+        // 3. 设置文本内容
+        document.getElementById('phenotype-text').textContent = currentData.text;
+
+        // 4. 渲染各类标签
+        renderTags('container-patient', currentData.patientPhenotypes, 'patient');
+        renderTags('container-family', currentData.familyPhenotypes, 'family');
+        renderTags('container-llm', currentData.llmPredictions, 'llm');
+        
+        // 5. 清空输入框 (切换数据时)
+        // 注意：如果你希望切换数据保留输入内容，可注释掉下面两行
+        document.getElementById('input-patient').value = '';
+        document.getElementById('input-family').value = '';
+    }
+
+    // 渲染标签函数
+    function renderTags(containerId, tags, typeClass) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = ''; // 清空现有内容
+
+        tags.forEach((tagText, index) => {
+            const tagEl = document.createElement('div');
+            tagEl.className = `tag ${typeClass}`;
+            
+            const textSpan = document.createElement('span');
+            textSpan.textContent = tagText;
+
+            tagEl.appendChild(textSpan);
+
+            // 仅当不是 LLM 类型时，才添加删除按钮
+            if (typeClass !== 'llm') {
+                const deleteBtn = document.createElement('span');
+                deleteBtn.className = 'delete-btn';
+                deleteBtn.innerHTML = '&times;'; // 乘号作为删除图标
+                deleteBtn.title = '删除此表型';
+                deleteBtn.onclick = () => deleteTag(typeClass, index);
+                tagEl.appendChild(deleteBtn);
+            }
+
+            container.appendChild(tagEl);
+        });
+    }
+
+    // 添加标签逻辑
+    function addTag(type) {
+        let inputId;
+        let targetArray;
+
+        if (type === 'patient') {
+            inputId = 'input-patient';
+            targetArray = activeData[currentIndex].patientPhenotypes;
+        } else if (type === 'family') {
+            inputId = 'input-family';
+            targetArray = activeData[currentIndex].familyPhenotypes;
+        } else {
+            return;
+        }
+
+        const inputEl = document.getElementById(inputId);
+        const newValue = inputEl.value.trim();
+
+        if (newValue) {
+            targetArray.push(newValue);
+            inputEl.value = ''; // 清空输入框
+            renderScreen(); // 重新渲染界面
+        }
+    }
+
+    // 处理回车键
+    function handleEnter(event, type) {
+        if (event.key === 'Enter') {
+            addTag(type);
+        }
+    }
+
+    // 删除标签逻辑
+    function deleteTag(type, index) {
+        // 根据类型找到对应的数据数组
+        let dataArray;
+        if (type === 'patient') dataArray = activeData[currentIndex].patientPhenotypes;
+        else if (type === 'family') dataArray = activeData[currentIndex].familyPhenotypes;
+        else if (type === 'llm') dataArray = activeData[currentIndex].llmPredictions;
+
+        if (dataArray) {
+            dataArray.splice(index, 1); // 删除对应项
+            renderScreen(); // 重新渲染界面
+        }
+    }
+
+    // 导航逻辑
+    function navigate(direction) {
+        const newIndex = currentIndex + direction;
+        if (newIndex >= 0 && newIndex < activeData.length) {
+            currentIndex = newIndex;
+            renderScreen();
+        }
+    }
+
+    // 提交逻辑
+    function submitData() {
+        const currentData = activeData[currentIndex];
+        
+        const payload = {
+            id: currentData.id,
+            finalPatientTags: currentData.patientPhenotypes,
+            finalFamilyTags: currentData.familyPhenotypes,
+            finalLLMTags: currentData.llmPredictions
+        };
+
+        console.log("提交数据:", payload);
+        alert(`数据 ${currentData.id} 已提交！\n(请查看控制台获取详细JSON输出)`);
+        
+        // 如果不是最后一条，自动跳到下一条
+        if (currentIndex < activeData.length - 1) {
+            navigate(1);
+        }
+    }
+</script>
+
+</body>
+</html>
