@@ -35,3 +35,31 @@ git clone https://github.com/PoseyPod/RAG-HPO.git
 # REAL-BioCR
 git clone https://github.com/dash-ka/REAL-BioCR.git
 ```
+
+## Test a new method (Take cliphen as an example)
+
+```
+# stage1: Obtain CHPO data
+# It is open-source and available at https://www.chinahpo.net/
+
+# stage2: test cliphen
+# All the methods we evaluated have open-source code; you just need to save the results in the same format as cliphen
+python cliphen.py \
+    --input all_data.json \
+    --output all_data.json
+
+# stage3: eval (cliphen can only extract positive phenotype.)
+# eval all phenotype
+python eval.py \
+    --input all_data.json
+
+# eval positive phenotype
+python eval.py \
+    --input all_data.json \
+    --positive-only \
+    --methods clinphen
+
+# eval hard subset
+python eval.py \
+    --input hard.json
+```

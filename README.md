@@ -17,8 +17,10 @@ python crawler/crawlerWWW.py
 # annotation
 python annotation/main.py
 
-# baseline (for evaluation)
+# baseline (for evaluation, detailed information is available in baseline/README.md)
 cd baseline
+python eval.py --input all_data.json
+# all_data.json include target data, ground truth and predicted results
 ```
 
 ## Downloads

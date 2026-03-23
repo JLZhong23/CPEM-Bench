@@ -6,12 +6,17 @@ from collections import defaultdict
 
 METHODS = ["bert", "tagger", "fasthpocr", "pbtagger", "real", "rag_hpo", "base"]
 
-def get_ground_truth(item: dict) -> set:
-    """Collect all HPO IDs from human annotations (patient + family, pos + neg)."""
+POSITIVE_KEYS = ["patient_phenotypes", "family_phenotypes"]
+ALL_KEYS = ["patient_phenotypes", "family_phenotypes",
+            "patient_phenotypes_neg", "family_phenotypes_neg"]
+
+
+def get_ground_truth(item: dict, positive_only: bool = False) -> set:
+    """Collect HPO IDs from human annotations."""
     ha = item.get("human_annotated", {})
     gt = set()
-    for key in ["patient_phenotypes", "family_phenotypes",
-                "patient_phenotypes_neg", "family_phenotypes_neg"]:
+    keys = POSITIVE_KEYS if positive_only else ALL_KEYS
+    for key in keys:
         gt.update(ha.get(key, []))
     return gt
 
@@ -23,12 +28,12 @@ def get_predictions(item: dict, method: str) -> set:
     return set(raw)
 
 
-def compute_metrics(data: list[dict], method: str) -> dict:
+def compute_metrics(data: list[dict], method: str, positive_only: bool = False) -> dict:
 
     precisions, recalls = [], []
 
     for item in data:
-        gt = get_ground_truth(item)
+        gt = get_ground_truth(item, positive_only)
         pred = get_predictions(item, method)
 
         if not gt and not pred:
@@ -47,7 +52,7 @@ def compute_metrics(data: list[dict], method: str) -> dict:
 
     n = len(precisions)
     if n == 0:
-        return 0, 0, 0, 0
+        return {"precision": 0, "recall": 0, "f1": 0, "n": 0}
 
     macro_p = sum(precisions) / n
     macro_r = sum(recalls) / n
@@ -61,7 +66,7 @@ def compute_metrics(data: list[dict], method: str) -> dict:
     }
 
 
-def print_table(data: list[dict], methods: list[str], title: str = ""):
+def print_table(data: list[dict], methods: list[str], positive_only: bool = False, title: str = ""):
     if title:
         print(f"\n  {title} ({len(data)} samples)")
     print(f"  {'Method':<12} {'Precision':>9} {'Recall':>9} {'F1':>9}")
@@ -69,7 +74,7 @@ def print_table(data: list[dict], methods: list[str], title: str = ""):
 
     results = {}
     for method in methods:
-        m = compute_metrics(data, method)
+        m = compute_metrics(data, method, positive_only)
         results[method] = m
         print(f"  {method:<12} {m['precision']:>9.4f} {m['recall']:>9.4f} {m['f1']:>9.4f}")
     print("  " + "-" * 45)
@@ -82,6 +87,9 @@ def main():
     parser = argparse.ArgumentParser(description="Evaluate PhenotypeIE methods.")
     parser.add_argument("--input", type=str, required=True, help="Path to all_data.json")
     parser.add_argument("--methods", nargs="*", default=METHODS, help="Methods to evaluate")
+    parser.add_argument("--positive-only", action="store_true",
+                        help="Evaluate on positive phenotypes only (patient + family), "
+                             "excluding negative phenotypes")
     parser.add_argument("--by-source", action="store_true", help="Break down by data source")
     parser.add_argument("--by-department", action="store_true", help="Break down by department")
     args = parser.parse_args()
@@ -91,9 +99,12 @@ def main():
         all_data = json.load(f)
     print(f"Loaded {len(all_data)} samples from {data_path}\n")
 
+    mode = "Positive phenotypes only" if args.positive_only else "All phenotypes (pos + neg)"
+    print(f"Evaluation mode: {mode}\n")
+
     print("Overall")
     print("=" * 50)
-    print_table(all_data, args.methods)
+    print_table(all_data, args.methods, args.positive_only)
 
     # By source
     if args.by_source:
@@ -103,7 +114,7 @@ def main():
         for item in all_data:
             source_data[item.get("source", "unknown")].append(item)
         for source, items in sorted(source_data.items(), key=lambda x: -len(x[1])):
-            print_table(items, args.methods, title=f"Source: {source}")
+            print_table(items, args.methods, args.positive_only, title=f"Source: {source}")
 
     # By department
     if args.by_department:
@@ -113,7 +124,7 @@ def main():
         for item in all_data:
             dept_data[item.get("department", "unknown")].append(item)
         for dept, items in sorted(dept_data.items(), key=lambda x: -len(x[1])):
-            print_table(items, args.methods, title=f"Department: {dept}")
+            print_table(items, args.methods, args.positive_only, title=f"Department: {dept}")
 
 
 if __name__ == "__main__":
